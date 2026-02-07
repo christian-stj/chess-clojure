@@ -1,0 +1,24 @@
+# Node
+node_modules/
+
+# Shadow-cljs build output
+.shadow-cljs/
+resources/public/js/cljs-runtime/
+resources/public/js/main.js
+
+# Clojure/IDE tooling
+.clj-kondo/
+.lsp/
+.cache/
+.idea/
+.nrepl-port
+.cpcache/
+
+# JVM
+*.class
+
+# Mac
+.DS_Store
+
+# Editor
+.vscode/
