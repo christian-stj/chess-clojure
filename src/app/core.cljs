@@ -8,6 +8,38 @@
    :black {:king "♚" :queen "♛" :rook "♜" :bishop "♝" :knight "♞" :pawn "♟"}})
 
 (def selected-square (r/atom nil))
+(def moves-version (r/atom 0))
+
+(defn format-square [[file rank]]
+  (str (name file) (name rank)))
+
+(defn move-label [idx move]
+  (str (inc idx) ". " (format-square (:from move)) " -> " (format-square (:to move))))
+
+(defn moves-panel []
+  (let [_ @moves-version
+        moves (chess/get-history)]
+    [:div {:style {:text-align "left"}}
+     [:h3 {:style {:color "#f0d9b5"
+                   :margin "0 0 12px"
+                   :font-size "18px"}}
+      "Moves"]
+     [:div {:style {:max-height "520px"
+                    :overflow-y "auto"
+                    :padding "8px"
+                    :background "#1f1f1f"
+                    :border "1px solid #333"
+                    :border-radius "6px"}}
+      (if (empty? moves)
+        [:div {:style {:color "#888" :font-size "14px"}}
+         "No moves yet"]
+        (for [[idx move] (map-indexed vector moves)]
+          ^{:key idx}
+          [:div {:style {:color "#ddd"
+                         :font-size "14px"
+                         :padding "4px 0"
+                         :border-bottom "1px solid #2b2b2b"}}
+           (move-label idx move)]))]]))
 
 (defn square [row col]
   (let [is-light? (even? (+ row col))
@@ -28,6 +60,7 @@
                    (if-let [from @selected-square]
                      (do
                        (chess/play-move from [file rank])
+                       (swap! moves-version inc)
                        (reset! selected-square nil))
                      (when piece-data
                        (reset! selected-square [file rank]))))]
@@ -76,7 +109,16 @@
                  :margin-bottom "30px"
                  :font-size "36px"}}
     "Chess"]
-   [chess-board]])
+  [:div {:style {:display "grid"
+            :grid-template-columns "1fr 1fr 1fr"
+            :gap "24px"
+            :align-items "start"
+            :margin "0 auto"
+            :padding "0 24px"}}
+   [:div]
+   [:div {:style {:justify-self "center"}}
+    [chess-board]]
+   [moves-panel]]])
 
 (defn ^:export main []
   (when-let [app (.getElementById js/document "app")]

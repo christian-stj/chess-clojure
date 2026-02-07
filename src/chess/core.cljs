@@ -9,12 +9,9 @@
                     :g {:1 {:piece :knight :color :white} :2 {:piece :pawn :color :white}  :7 {:piece :pawn :color :black} :8 {:piece :knight :color :black}}
                     :h {:1 {:piece :rook :color :white} :2 {:piece :pawn :color :white}  :7 {:piece :pawn :color :black} :8 {:piece :rook :color :black}}})
 
-(def game-state (atom initial-board))
-
-; (def game-history (atom []))
-
-(defn get-state []
-  @game-state)
+(def game-history
+  "Vector of move maps in order: {:from [:e :2] :to [:e :4]}."
+  (atom []))
 
 (defn move-piece [board from to]
   (let [from-file (first from)
@@ -26,6 +23,11 @@
         (assoc-in [to-file to-rank] piece)
         (assoc-in [from-file from-rank] nil))))
 
+(defn get-state []
+  (reduce (fn [state move] (move-piece state (:from move) (:to move))) initial-board @game-history))
+
+(defn get-history []
+  @game-history)
 
 (defn play-move [from to]
-  (swap! game-state move-piece from to))
+  (swap! game-history conj {:from from :to to}))
