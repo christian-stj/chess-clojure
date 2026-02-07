@@ -1,33 +1,35 @@
-(ns chess.core)
+(ns chess.core
+  (:require
+   [chess.moves :refer [is-legal-move? move-piece]]))
 
-(def initial-board {:a {:1 {:piece :rook :color :white} :2 {:piece :pawn :color :white}  :7 {:piece :pawn :color :black} :8 {:piece :rook :color :black}}
-                    :b {:1 {:piece :knight :color :white} :2 {:piece :pawn :color :white}  :7 {:piece :pawn :color :black} :8 {:piece :knight :color :black}}
-                    :c {:1 {:piece :bishop :color :white} :2 {:piece :pawn :color :white}  :7 {:piece :pawn :color :black} :8 {:piece :bishop :color :black}}
-                    :d {:1 {:piece :queen :color :white} :2 {:piece :pawn :color :white}  :7 {:piece :pawn :color :black} :8 {:piece :queen :color :black}}
-                    :e {:1 {:piece :king :color :white} :2 {:piece :pawn :color :white}  :7 {:piece :pawn :color :black} :8 {:piece :king :color :black}}
-                    :f {:1 {:piece :bishop :color :white} :2 {:piece :pawn :color :white}  :7 {:piece :pawn :color :black} :8 {:piece :bishop :color :black}}
-                    :g {:1 {:piece :knight :color :white} :2 {:piece :pawn :color :white}  :7 {:piece :pawn :color :black} :8 {:piece :knight :color :black}}
-                    :h {:1 {:piece :rook :color :white} :2 {:piece :pawn :color :white}  :7 {:piece :pawn :color :black} :8 {:piece :rook :color :black}}})
+(def piece-types #{:king :queen :rook :bishop :knight :pawn})
+
+(def initial-board {:a {:1 {:type :rook :color :white} :2 {:type :pawn :color :white}  :7 {:type :pawn :color :black} :8 {:type :rook :color :black}}
+                    :b {:1 {:type :knight :color :white} :2 {:type :pawn :color :white}  :7 {:type :pawn :color :black} :8 {:type :knight :color :black}}
+                    :c {:1 {:type :bishop :color :white} :2 {:type :pawn :color :white}  :7 {:type :pawn :color :black} :8 {:type :bishop :color :black}}
+                    :d {:1 {:type :queen :color :white} :2 {:type :pawn :color :white}  :7 {:type :pawn :color :black} :8 {:type :queen :color :black}}
+                    :e {:1 {:type :king :color :white} :2 {:type :pawn :color :white}  :7 {:type :pawn :color :black} :8 {:type :king :color :black}}
+                    :f {:1 {:type :bishop :color :white} :2 {:type :pawn :color :white}  :7 {:type :pawn :color :black} :8 {:type :bishop :color :black}}
+                    :g {:1 {:type :knight :color :white} :2 {:type :pawn :color :white}  :7 {:type :pawn :color :black} :8 {:type :knight :color :black}}
+                    :h {:1 {:type :rook :color :white} :2 {:type :pawn :color :white}  :7 {:type :pawn :color :black} :8 {:type :rook :color :black}}})
 
 (def game-history
   "Vector of move maps in order: {:from [:e :2] :to [:e :4]}."
   (atom []))
 
-(defn move-piece [board from to]
-  (let [from-file (first from)
-        from-rank (second from)
-        to-file (first to)
-        to-rank (second to)
-        piece (get-in board [from-file from-rank])]
-    (-> board
-        (assoc-in [to-file to-rank] piece)
-        (assoc-in [from-file from-rank] nil))))
-
 (defn get-state []
+  {:post [(every? (fn [piece] (contains? piece-types (:type piece))) (mapcat vals (vals %)))]}
   (reduce (fn [state move] (move-piece state (:from move) (:to move))) initial-board @game-history))
 
 (defn get-history []
   @game-history)
 
 (defn play-move [from to]
-  (swap! game-history conj {:from from :to to}))
+
+  (let [board (get-state)
+        color-to-move (if (even? (count @game-history)) :white :black)]
+    (if (is-legal-move? board color-to-move from to)
+      (do
+        (swap! game-history conj {:from from :to to})
+        {:ok "Move played"})
+      {:error "Illegal move"})))

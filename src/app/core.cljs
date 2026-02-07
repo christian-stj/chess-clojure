@@ -50,7 +50,7 @@
         board (chess/get-state)
         piece-data (get-in board [file rank])
         piece-str (when piece-data
-                    (get-in pieces [(:color piece-data) (:piece piece-data)]))
+              (get-in pieces [(:color piece-data) (:type piece-data)]))
         is-selected? (= @selected-square [file rank])
         bg-color (cond
                    is-selected? "#86a666"
