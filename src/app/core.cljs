@@ -59,7 +59,7 @@
         on-click (fn []
                    (if-let [from @selected-square]
                      (do
-                       (chess/play-move from [file rank])
+                       (js/console.log (clj->js (chess/play-move from [file rank])))
                        (swap! moves-version inc)
                        (reset! selected-square nil))
                      (when piece-data
@@ -76,9 +76,9 @@
                    :user-select "none"}}
      piece-str]))
 
-(defn chess-board []
+(defn chess-board [check?]
   [:div {:style {:display "inline-block"
-                 :border "3px solid #333"
+                 :border (if check? "3px solid #ff3b3b" "3px solid #333")
                  :background "#2a2a2a"
                  :padding "10px"}}
    [:div {:style {:display "flex"}}
@@ -109,16 +109,28 @@
                  :margin-bottom "30px"
                  :font-size "36px"}}
     "Chess"]
-  [:div {:style {:display "grid"
-            :grid-template-columns "1fr 1fr 1fr"
-            :gap "24px"
-            :align-items "start"
-            :margin "0 auto"
-            :padding "0 24px"}}
-   [:div]
-   [:div {:style {:justify-self "center"}}
-    [chess-board]]
-   [moves-panel]]])
+   (let [_ @moves-version
+         check? (chess/get-is-check)]
+     [:div {:style {:display "grid"
+                    :grid-template-columns "1fr 1fr 1fr"
+                    :gap "24px"
+                    :align-items "start"
+                    :margin "0 auto"
+                    :padding "0 24px"}}
+      ;; Left column: Check indicator
+      [:div {:style {:display "flex"
+                     :justify-content "flex-end"
+                     :padding-right "8px"}}
+       (when check?
+         [:div {:style {:color "#ff3b3b"
+                        :font-weight "700"
+                        :font-size "18px"}}
+          "Check!"])]
+      ;; Middle column: Board
+      [:div {:style {:justify-self "center"}}
+       [chess-board check?]]
+      ;; Right column: Moves
+      [moves-panel]])])
 
 (defn ^:export main []
   (when-let [app (.getElementById js/document "app")]
