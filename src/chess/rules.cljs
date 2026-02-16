@@ -86,8 +86,7 @@
     (and
      (not is-target-within-one-square-from-opponent-king?)
      (if is-castling-move?
-       (let [movement-sign (if (= color-to-move :white) 1 -1)
-             is-queenside-castle? (= -2 (* movement-sign file-index-diff))
+       (let [is-queenside-castle? (neg? file-index-diff)
              rook-position (if is-queenside-castle?
                              [:a (second from)]
                              [:h (second from)])
