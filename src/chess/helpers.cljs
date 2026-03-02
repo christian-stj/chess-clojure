@@ -10,6 +10,9 @@
   (when (and (<= 0 file-index 7) (<= 0 rank-index 7))
     [(nth files file-index) (nth ranks rank-index)]))
 
+(defn same-square? [from to]
+  (= from to))
+
 (defn- move-rook-for-castling [board king-from king-to]
   (let [[_ from-rank] king-from
         kingside? (> (first (square->indices king-to))

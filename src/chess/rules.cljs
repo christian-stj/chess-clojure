@@ -9,12 +9,10 @@
                           has-moved?
                           has-piece-of-same-color?
                           path-to
+                          same-square?
                           slides-to?
                           places-king-in-check?
                           square->indices]]))
-
-(defn- same-square? [from to]
-  (= from to))
 
 ;; --- Directions ---
 
@@ -26,7 +24,7 @@
 (defn- pawn-move? [move-list from to]
   (let [board (get-board-state move-list)
         [from-file from-rank] from
-        [to-file _to-rank] to
+        [to-file _] to
         piece (board from)
         piece-at-destination (board to)
         on-base-rank? (or (and (= (:color piece) :white) (= from-rank :2))
@@ -64,9 +62,10 @@
         color-to-move (get-color-to-move move-list)
         on-base-position? (or (and (= color-to-move :white) (= from [:e :1]))
                            (and (= color-to-move :black) (= from [:e :8])))
+        board (get-board-state move-list)
         opponent-piece? (fn [p] (and p (not= (:color p) color-to-move)))
-        opponent-pieces (find-pieces (get-board-state move-list) opponent-piece?)
-        opponent-king (first (filter (fn [sq] (= (:type ((get-board-state move-list) sq)) :king)) opponent-pieces))
+        opponent-pieces (find-pieces board opponent-piece?)
+        opponent-king (first (filter (fn [sq] (= (:type (board sq)) :king)) opponent-pieces))
         target-within-one-square-of-opponent-king? (and opponent-king
                                  (let [[opp-file-index opp-rank-index] (square->indices opponent-king)
                                        [to-file-index to-rank-index] (square->indices to)]
