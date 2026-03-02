@@ -25,25 +25,52 @@
 
 (declare move-rules)
 
+(defn- last-move-was-double-pawn-push? [board move-list to-file]
+  (when-let [{last-from :from [last-to-file :as last-to] :to} (peek move-list)]
+    (let [last-piece (board last-to)
+          [_ rank-diff] (abs-square-diff last-from last-to)]
+      (and last-piece
+           (= (:type last-piece) :pawn)
+           (= rank-diff 2)
+           (= last-to-file to-file)))))
+
+(defn- en-passant? [move-list board from to]
+  (let [color (:color (board from))
+        [_ from-rank] from
+        [to-file _] to
+        [file-diff rank-diff] (abs-square-diff from to)
+        on-en-passant-rank? (or (and (= color :white) (= from-rank :5))
+                                (and (= color :black) (= from-rank :4)))]
+    (and on-en-passant-rank?
+         (= rank-diff 1)
+         (= file-diff 1)
+         (nil? (board to))
+         (last-move-was-double-pawn-push? board move-list to-file))))
+
 (defn- pawn-move? [move-list from to]
   (let [board (get-board-state move-list)
         [from-file from-rank] from
         [to-file _] to
         piece (board from)
+        color (:color piece)
+        [file-diff rank-diff] (square-diff from to)
+        forward? (if (= color :white) (pos? rank-diff) (neg? rank-diff))
+        rank-diff (Math/abs rank-diff)
+        file-diff (Math/abs file-diff)
         piece-at-destination (board to)
-        on-base-rank? (or (and (= (:color piece) :white) (= from-rank :2))
-                       (and (= (:color piece) :black) (= from-rank :7)))
-        [file-index-diff rank-index-diff] (square-diff from to)
-        rank-diff (if (= (:color piece) :white) rank-index-diff (- rank-index-diff))]
-    (if (= from-file to-file) ; Moving straight
-      (and (nil? piece-at-destination)
-           (if on-base-rank?
-             (>= 2 rank-diff 0)
-             (>= 1 rank-diff 0)))
-      (and (= 1 rank-diff) ; Capturing diagonally
-           (= (Math/abs file-index-diff) 1)
-           (some? piece-at-destination)
-           (not= (:color piece-at-destination) (:color piece)))))) ; Moving diagonally must capture an opponent piece
+        on-base-rank? (or (and (= color :white) (= from-rank :2))
+                          (and (= color :black) (= from-rank :7)))]
+    (and forward?
+         (if (= from-file to-file) ; Moving straight
+           (and (nil? piece-at-destination)
+                (if on-base-rank?
+                  (<= rank-diff 2)
+                  (<= rank-diff 1)))
+           (and (= rank-diff 1) ; Capturing diagonally
+                (= file-diff 1)
+                (or (and (some? piece-at-destination)
+                         (not= (:color piece-at-destination) color))
+                    (en-passant? move-list board from to)))))))
 
 (defn- rook-move? [move-list from to]
   (slides-to? (get-board-state move-list) from to straight))

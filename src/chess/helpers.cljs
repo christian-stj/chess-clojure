@@ -34,15 +34,30 @@
         (assoc [rook-to-file from-rank] rook-piece)
         (dissoc [rook-from-file from-rank]))))
 
+(defn- remove-en-passant-capture [board from to]
+  (let [[to-file _] to
+        [_ from-rank] from]
+    (dissoc board [to-file from-rank])))
+
+(defn- en-passant-capture? [board from to]
+  (let [piece (board from)
+        [from-file _] from
+        [to-file _] to]
+    (and (= (:type piece) :pawn)
+         (not= from-file to-file)       ; diagonal move
+         (nil? (board to)))))           ; no piece at destination
+
 (defn move-piece [board from to]
   (let [piece (board from)
         castling? (and (= (:type piece) :king)
                        (= 2 (Math/abs (- (first (square->indices to))
-                                         (first (square->indices from))))))]
+                                         (first (square->indices from))))))
+        en-passant? (en-passant-capture? board from to)]
     (cond-> (-> board
                 (assoc to piece)
                 (dissoc from))
-      castling? (move-rook-for-castling from to))))
+      castling?   (move-rook-for-castling from to)
+      en-passant? (remove-en-passant-capture from to))))
 
 (def ^:private apply-moves
   (memoize
