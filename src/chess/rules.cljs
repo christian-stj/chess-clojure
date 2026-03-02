@@ -1,6 +1,7 @@
 (ns chess.rules
   (:require
-   [chess.helpers :refer [can-piece-reach?
+   [chess.helpers :refer [abs-square-diff
+                          can-piece-reach?
                           find-piece
                           find-pieces
                           get-board-state
@@ -11,8 +12,9 @@
                           path-to
                           same-square?
                           slides-to?
+                          square-diff
                           places-king-in-check?
-                          square->indices]]))
+                          within-one-square?]]))
 
 ;; --- Directions ---
 
@@ -20,6 +22,8 @@
 (def ^:private diagonal  [[1 1] [1 -1] [-1 1] [-1 -1]])
 
 ;; --- Move rules ---
+
+(declare move-rules)
 
 (defn- pawn-move? [move-list from to]
   (let [board (get-board-state move-list)
@@ -29,7 +33,7 @@
         piece-at-destination (board to)
         on-base-rank? (or (and (= (:color piece) :white) (= from-rank :2))
                        (and (= (:color piece) :black) (= from-rank :7)))
-        [file-index-diff rank-index-diff] (map - (square->indices to) (square->indices from))
+        [file-index-diff rank-index-diff] (square-diff from to)
         rank-diff (if (= (:color piece) :white) rank-index-diff (- rank-index-diff))]
     (if (= from-file to-file) ; Moving straight
       (and (nil? piece-at-destination)
@@ -45,7 +49,7 @@
   (slides-to? (get-board-state move-list) from to straight))
 
 (defn- knight-move? [_ from to]
-    (let [[file-index-diff rank-index-diff] (map (fn [n] (Math/abs n)) (map - (square->indices to) (square->indices from)))]
+    (let [[file-index-diff rank-index-diff] (abs-square-diff from to)]
         (or (and (= file-index-diff 2) (= rank-index-diff 1))
             (and (= file-index-diff 1) (= rank-index-diff 2)))))
 
@@ -58,7 +62,7 @@
         (slides-to? board from to diagonal))))
 
 (defn- king-move? [move-list from to]
-  (let [[file-index-diff rank-index-diff] (map - (square->indices to) (square->indices from))
+  (let [[file-index-diff rank-index-diff] (square-diff from to)
         color-to-move (get-color-to-move move-list)
         on-base-position? (or (and (= color-to-move :white) (= from [:e :1]))
                            (and (= color-to-move :black) (= from [:e :8])))
@@ -66,17 +70,8 @@
         opponent-piece? (fn [p] (and p (not= (:color p) color-to-move)))
         opponent-pieces (find-pieces board opponent-piece?)
         opponent-king (first (filter (fn [sq] (= (:type (board sq)) :king)) opponent-pieces))
-        target-within-one-square-of-opponent-king? (and opponent-king
-                                 (let [[opp-file-index opp-rank-index] (square->indices opponent-king)
-                                       [to-file-index to-rank-index] (square->indices to)]
-                                   (and (<= (Math/abs (- opp-file-index to-file-index)) 1)
-                                        (<= (Math/abs (- opp-rank-index to-rank-index)) 1))))
-        movement-rules-for-other-pieces {:pawn pawn-move?
-                                         :rook rook-move?
-                                         :knight knight-move?
-                                         :bishop bishop-move?
-                                         :queen queen-move?
-                                         :king (fn [_ _ _] false)} ; Opponent king's moves are not relevant for determining if our king is in check
+        target-within-one-square-of-opponent-king? (and opponent-king (within-one-square? opponent-king to))
+        movement-rules-for-other-pieces (assoc move-rules :king (fn [_ _ _] false)) ; Opponent king's moves are not relevant for determining if our king is in check
         castling? (and on-base-position?
                        (= 0 rank-index-diff)
                        (= 2 (Math/abs file-index-diff)))]
@@ -101,18 +96,19 @@
               (not (has-moved? move-list rook-position)) ; Rook must not have moved
               (slides-to? (get-board-state move-list) from rook-position straight))) ; Is the path to the rook clear?
 
-       (and (<= (Math/abs file-index-diff) 1)
-            (<= (Math/abs rank-index-diff) 1))))))
+       (within-one-square? from to)))))
+
+(def ^:private move-rules
+  {:pawn   pawn-move?
+   :rook   rook-move?
+   :knight knight-move?
+   :bishop bishop-move?
+   :queen  queen-move?
+   :king   king-move?})
 
 (defn- legal-piece-move? [move-list from to]
-  (let [piece ((get-board-state move-list) from)]
-    (cond
-      (= :pawn (:type piece)) (pawn-move? move-list from to)
-      (= :rook (:type piece)) (rook-move? move-list from to)
-      (= :knight (:type piece)) (knight-move? move-list from to)
-      (= :bishop (:type piece)) (bishop-move? move-list from to)
-      (= :queen (:type piece)) (queen-move? move-list from to)
-      (= :king (:type piece)) (king-move? move-list from to))))
+  (when-let [movement-rule (move-rules (:type ((get-board-state move-list) from)))]
+    (movement-rule move-list from to)))
 
 ;; --- Board queries ---
 

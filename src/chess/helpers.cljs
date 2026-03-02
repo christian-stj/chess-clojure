@@ -13,6 +13,16 @@
 (defn same-square? [from to]
   (= from to))
 
+(defn square-diff [from to]
+  (mapv - (square->indices to) (square->indices from)))
+
+(defn abs-square-diff [from to]
+  (mapv (fn [n] (Math/abs n)) (square-diff from to)))
+
+(defn within-one-square? [from to]
+  (let [[fd rd] (abs-square-diff from to)]
+    (and (<= fd 1) (<= rd 1))))
+
 (defn- move-rook-for-castling [board king-from king-to]
   (let [[_ from-rank] king-from
         kingside? (> (first (square->indices king-to))

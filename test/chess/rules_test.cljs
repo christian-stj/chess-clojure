@@ -1,7 +1,6 @@
 (ns chess.rules-test
   (:require
    [cljs.test :refer [deftest testing is]]
-   [chess.definitions :refer [initial-board]]
    [chess.rules :refer [legal-move? in-check?]]))
 
 ;; --- Pawn moves ---
