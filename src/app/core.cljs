@@ -42,19 +42,19 @@
            (move-label idx move)]))]]))
 
 (defn square [row col]
-  (let [is-light? (even? (+ row col))
+  (let [light? (even? (+ row col))
         files [:a :b :c :d :e :f :g :h]
         ranks [8 7 6 5 4 3 2 1]
         file (nth files col)
         rank (keyword (str (nth ranks row)))
         board (chess/get-state)
-        piece-data (get-in board [file rank])
+        piece-data (board [file rank])
         piece-str (when piece-data
               (get-in pieces [(:color piece-data) (:type piece-data)]))
-        is-selected? (= @selected-square [file rank])
+        selected? (= @selected-square [file rank])
         bg-color (cond
-                   is-selected? "#86a666"
-                   is-light? "#f0d9b5"
+                   selected? "#86a666"
+                   light? "#f0d9b5"
                    :else "#b58863")
         on-click (fn []
                    (if-let [from @selected-square]
@@ -110,7 +110,7 @@
                  :font-size "36px"}}
     "Chess"]
    (let [_ @moves-version
-         check? (chess/get-is-check)]
+         check? (chess/check?)]
      [:div {:style {:display "grid"
                     :grid-template-columns "1fr 1fr 1fr"
                     :gap "24px"

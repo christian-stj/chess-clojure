@@ -13,7 +13,7 @@
                           places-king-in-check?
                           square->indices]]))
 
-(defn- is-same-coordinate? [from to]
+(defn- same-square? [from to]
   (= from to))
 
 ;; --- Directions ---
@@ -23,82 +23,81 @@
 
 ;; --- Move rules ---
 
-(defn- is-legal-move-for-pawn? [move-list from to]
+(defn- pawn-move? [move-list from to]
   (let [board (get-board-state move-list)
-        from-file (first from)
-        from-rank (second from)
-        to-file (first to)
-        to-rank (second to)
-        piece (get-in board [from-file from-rank])
-        piece-at-destination (get-in board [to-file to-rank])
-        is-on-base-rank? (or (and (= (:color piece) :white) (= from-rank :2))
-                             (and (= (:color piece) :black) (= from-rank :7)))
+        [from-file from-rank] from
+        [to-file _to-rank] to
+        piece (board from)
+        piece-at-destination (board to)
+        on-base-rank? (or (and (= (:color piece) :white) (= from-rank :2))
+                       (and (= (:color piece) :black) (= from-rank :7)))
         [file-index-diff rank-index-diff] (map - (square->indices to) (square->indices from))
         rank-diff (if (= (:color piece) :white) rank-index-diff (- rank-index-diff))]
     (if (= from-file to-file) ; Moving straight
-      (and (empty? piece-at-destination)
-           (if is-on-base-rank?
+      (and (nil? piece-at-destination)
+           (if on-base-rank?
              (>= 2 rank-diff 0)
              (>= 1 rank-diff 0)))
       (and (= 1 rank-diff) ; Capturing diagonally
            (= (Math/abs file-index-diff) 1)
-           (not-empty piece-at-destination)
+           (some? piece-at-destination)
            (not= (:color piece-at-destination) (:color piece)))))) ; Moving diagonally must capture an opponent piece
 
-(defn- is-legal-move-for-rook? [move-list from to]
+(defn- rook-move? [move-list from to]
   (slides-to? (get-board-state move-list) from to straight))
 
-(defn- is-legal-move-for-knight? [_ from to]
-    (let [[file-index-diff rank-index-diff] (map #(Math/abs %) (map - (square->indices to) (square->indices from)))]
+(defn- knight-move? [_ from to]
+    (let [[file-index-diff rank-index-diff] (map (fn [n] (Math/abs n)) (map - (square->indices to) (square->indices from)))]
         (or (and (= file-index-diff 2) (= rank-index-diff 1))
             (and (= file-index-diff 1) (= rank-index-diff 2)))))
 
-(defn- is-legal-move-for-bishop? [move-list from to]
+(defn- bishop-move? [move-list from to]
   (slides-to? (get-board-state move-list) from to diagonal))
 
-(defn- is-legal-move-for-queen? [move-list from to]
+(defn- queen-move? [move-list from to]
   (let [board (get-board-state move-list)]
     (or (slides-to? board from to straight)
         (slides-to? board from to diagonal))))
 
-(defn- is-legal-move-for-king? [move-list from to]
+(defn- king-move? [move-list from to]
   (let [[file-index-diff rank-index-diff] (map - (square->indices to) (square->indices from))
         color-to-move (get-color-to-move move-list)
-        is-on-base-position? (or (and (= color-to-move :white) (= from [:e :1]))
-                                 (and (= color-to-move :black) (= from [:e :8])))
-        is-opponent-piece? (fn [p] (and p (not= (:color p) color-to-move)))
-        opponent-pieces (find-pieces (get-board-state move-list) is-opponent-piece?)
-        opponent-king (first (filter (fn [p] (= (:type p) :king)) opponent-pieces))
-        is-target-within-one-square-from-opponent-king? (and opponent-king
-                                                             (let [[opp-file-index opp-rank-index] (square->indices opponent-king)
-                                                                   [to-file-index to-rank-index] (square->indices to)]
-                                                               (and (<= (Math/abs (- opp-file-index to-file-index)) 1)
-                                                                    (<= (Math/abs (- opp-rank-index to-rank-index)) 1))))
-        movement-rules-for-other-pieces {:pawn is-legal-move-for-pawn?
-                                         :rook is-legal-move-for-rook?
-                                         :knight is-legal-move-for-knight?
-                                         :bishop is-legal-move-for-bishop?
-                                         :queen is-legal-move-for-queen?
+        on-base-position? (or (and (= color-to-move :white) (= from [:e :1]))
+                           (and (= color-to-move :black) (= from [:e :8])))
+        opponent-piece? (fn [p] (and p (not= (:color p) color-to-move)))
+        opponent-pieces (find-pieces (get-board-state move-list) opponent-piece?)
+        opponent-king (first (filter (fn [sq] (= (:type ((get-board-state move-list) sq)) :king)) opponent-pieces))
+        target-within-one-square-of-opponent-king? (and opponent-king
+                                 (let [[opp-file-index opp-rank-index] (square->indices opponent-king)
+                                       [to-file-index to-rank-index] (square->indices to)]
+                                   (and (<= (Math/abs (- opp-file-index to-file-index)) 1)
+                                        (<= (Math/abs (- opp-rank-index to-rank-index)) 1))))
+        movement-rules-for-other-pieces {:pawn pawn-move?
+                                         :rook rook-move?
+                                         :knight knight-move?
+                                         :bishop bishop-move?
+                                         :queen queen-move?
                                          :king (fn [_ _ _] false)} ; Opponent king's moves are not relevant for determining if our king is in check
-        is-castling-move? (and is-on-base-position?
-                               (= 0 rank-index-diff)
-                               (= 2 (Math/abs file-index-diff)))]
+        castling? (and on-base-position?
+                       (= 0 rank-index-diff)
+                       (= 2 (Math/abs file-index-diff)))]
     (and
-     (not is-target-within-one-square-from-opponent-king?)
-     (if is-castling-move?
-       (let [is-queenside-castle? (neg? file-index-diff)
-             rook-position (if is-queenside-castle?
-                             [:a (second from)]
-                             [:h (second from)])
+     (not target-within-one-square-of-opponent-king?)
+     (if castling?
+       (let [queenside? (neg? file-index-diff)
+             [_ from-rank] from
+             rook-position (if queenside?
+                             [:a from-rank]
+                             [:h from-rank])
              path-to-target (path-to from to straight)
              opponent-piece-positions (get-opponent-piece-positions move-list)]
-         (and (not (some true?
-                         (for [pos-on-path path-to-target
-                               opponent-piece-pos opponent-piece-positions
-                               :let [movement-rule (get movement-rules-for-other-pieces (:type (get-in (get-board-state move-list) opponent-piece-pos)))
-                                     is-in-check? (can-piece-reach? move-list opponent-piece-pos movement-rule pos-on-path)]
-                               :when is-in-check?]
-                           (reduced true)))) ; Cannot castle through check
+         (and (not (some (fn [pos-on-path]
+                          (some (fn [opponent-piece-pos]
+                                  (let [movement-rule (get movement-rules-for-other-pieces
+                                                           (:type ((get-board-state move-list) opponent-piece-pos)))]
+                                    (can-piece-reach? move-list opponent-piece-pos movement-rule pos-on-path)))
+                                opponent-piece-positions))
+                        path-to-target)) ; Cannot castle through check
               (not (has-moved? move-list from)) ; King must not have moved
               (not (has-moved? move-list rook-position)) ; Rook must not have moved
               (slides-to? (get-board-state move-list) from rook-position straight))) ; Is the path to the rook clear?
@@ -106,36 +105,33 @@
        (and (<= (Math/abs file-index-diff) 1)
             (<= (Math/abs rank-index-diff) 1))))))
 
-(defn- is-legal-move-for-piece? [move-list from to]
-  (let [board (get-board-state move-list)
-        piece (get-in board from)]
+(defn- legal-piece-move? [move-list from to]
+  (let [piece ((get-board-state move-list) from)]
     (cond
-      (= :pawn (:type piece)) (is-legal-move-for-pawn? move-list from to)
-      (= :rook (:type piece)) (is-legal-move-for-rook? move-list from to)
-      (= :knight (:type piece)) (is-legal-move-for-knight? move-list from to)
-      (= :bishop (:type piece)) (is-legal-move-for-bishop? move-list from to)
-      (= :queen (:type piece)) (is-legal-move-for-queen? move-list from to)
-      (= :king (:type piece)) (is-legal-move-for-king? move-list from to))))
+      (= :pawn (:type piece)) (pawn-move? move-list from to)
+      (= :rook (:type piece)) (rook-move? move-list from to)
+      (= :knight (:type piece)) (knight-move? move-list from to)
+      (= :bishop (:type piece)) (bishop-move? move-list from to)
+      (= :queen (:type piece)) (queen-move? move-list from to)
+      (= :king (:type piece)) (king-move? move-list from to))))
 
 ;; --- Board queries ---
 
-(defn is-check? [move-list]
+(defn in-check? [move-list]
   (let [board (get-board-state move-list)
         color-to-move (get-color-to-move move-list)
-        king-position (find-piece board #(and (= (:type %) :king) (= (:color %) color-to-move)))
+        king-position (find-piece board (fn [p] (and (= (:type p) :king) (= (:color p) color-to-move))))
         opponent-piece-positions (get-opponent-piece-positions move-list)]
-    (some true?
-          (map
-           (fn [p] (can-piece-reach? move-list p is-legal-move-for-piece? king-position))
-           opponent-piece-positions))))
+    (some (fn [p] (can-piece-reach? move-list p legal-piece-move? king-position))
+          opponent-piece-positions)))
 
-(defn is-legal-move? [move-list from to]
+(defn legal-move? [move-list from to]
   (let [board (get-board-state move-list)
-        piece (get-in board from)
+        piece (board from)
         color-to-move (get-color-to-move move-list)
-        is-color-to-move? (and piece (= (:color piece) color-to-move))]
-    (and is-color-to-move?
-         (not (is-same-coordinate? from to))
+        current-player-to-move? (and piece (= (:color piece) color-to-move))]
+    (and current-player-to-move?
+         (not (same-square? from to))
          (not (has-piece-of-same-color? board from to))
-         (not (places-king-in-check? move-list is-legal-move-for-piece? from to)) ; Resolving check is handled by not placing the king in check again
-         (is-legal-move-for-piece? move-list from to))))
+         (not (places-king-in-check? move-list legal-piece-move? from to)) ; Resolving check is handled by not placing the king in check again
+         (legal-piece-move? move-list from to))))
