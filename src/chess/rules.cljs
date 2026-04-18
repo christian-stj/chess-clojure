@@ -77,9 +77,9 @@
   (slides-to? (get-board-state move-list) from to straight))
 
 (defn- knight-move? [_ from to]
-    (let [[file-index-diff rank-index-diff] (abs-square-diff from to)]
-        (or (and (= file-index-diff 2) (= rank-index-diff 1))
-            (and (= file-index-diff 1) (= rank-index-diff 2)))))
+  (let [[file-index-diff rank-index-diff] (abs-square-diff from to)]
+    (or (and (= file-index-diff 2) (= rank-index-diff 1))
+        (and (= file-index-diff 1) (= rank-index-diff 2)))))
 
 (defn- bishop-move? [move-list from to]
   (slides-to? (get-board-state move-list) from to diagonal))
@@ -93,7 +93,7 @@
   (let [[file-index-diff rank-index-diff] (square-diff from to)
         color-to-move (get-color-to-move move-list)
         on-base-position? (or (and (= color-to-move :white) (= from [:e :1]))
-                           (and (= color-to-move :black) (= from [:e :8])))
+                              (and (= color-to-move :black) (= from [:e :8])))
         board (get-board-state move-list)
         opponent-piece? (fn [p] (and p (not= (:color p) color-to-move)))
         opponent-pieces (find-pieces board opponent-piece?)
@@ -114,12 +114,12 @@
              path-to-target (path-to from to straight)
              opponent-piece-positions (get-opponent-piece-positions move-list)]
          (and (not (some (fn [pos-on-path]
-                          (some (fn [opponent-piece-pos]
-                                  (let [movement-rule (get movement-rules-for-other-pieces
-                                                           (:type ((get-board-state move-list) opponent-piece-pos)))]
-                                    (can-piece-reach? move-list opponent-piece-pos movement-rule pos-on-path)))
-                                opponent-piece-positions))
-                        path-to-target)) ; Cannot castle through check
+                           (some (fn [opponent-piece-pos]
+                                   (let [movement-rule (get movement-rules-for-other-pieces
+                                                            (:type ((get-board-state move-list) opponent-piece-pos)))]
+                                     (can-piece-reach? move-list opponent-piece-pos movement-rule pos-on-path)))
+                                 opponent-piece-positions))
+                         path-to-target)) ; Cannot castle through check
               (not (has-moved? move-list from)) ; King must not have moved
               (not (has-moved? move-list rook-position)) ; Rook must not have moved
               (slides-to? (get-board-state move-list) from rook-position straight))) ; Is the path to the rook clear?
@@ -149,6 +149,16 @@
           opponent-piece-positions)))
 
 (def ^:private promotion-types #{:queen :rook :bishop :knight})
+
+(defn pawn-reaching-last-rank?
+  "Returns true if the piece at `from` is a pawn whose move to `to` reaches the promotion rank."
+  [move-list from to]
+  (let [board (get-board-state move-list)
+        piece (board from)]
+    (and piece
+         (= (:type piece) :pawn)
+         (= (:color piece) (get-color-to-move move-list))
+         (reaches-last-rank? (:color piece) to))))
 
 (defn- promotion-valid? [board from to promotion]
   (let [piece (board from)]
