@@ -7,12 +7,13 @@
 
 (s/def ::ok string?)
 (s/def ::error string?)
+(s/def ::game-history ::d/history)
 (s/def ::move-result (s/or :success (s/keys :req-un [::ok])
                            :failure (s/keys :req-un [::error])))
 
 (def game-history
   "Vector of move maps in order: {:from [:e :2] :to [:e :4]}."
-    (atom []))
+    (atom [] :validator #(s/valid? ::game-history %)))
 
 (s/fdef get-state
   :ret ::d/board)
@@ -21,10 +22,18 @@
   (get-board-state @game-history))
 
 (s/fdef get-history
-  :ret ::d/history)
+  :ret ::d/annotated-history)
 
-(defn get-history []
-  @game-history)
+(defn- history-with-check-states [history]
+  (mapv (fn [idx move]
+          (assoc move :check? (in-check? (subvec history 0 (inc idx)))))
+        (range (count history))
+        history))
+
+(defn get-history
+  ([] (get-history identity))
+  ([mapper]
+   (mapv mapper (history-with-check-states @game-history))))
 
 (defn check? []
   (in-check? @game-history))

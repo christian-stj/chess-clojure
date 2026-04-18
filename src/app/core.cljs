@@ -14,8 +14,21 @@
 (defn format-square [[file rank]]
   (str (name file) (name rank)))
 
+(def promotion-label
+  {:queen "Q"
+   :rook "R"
+   :bishop "B"
+   :knight "N"})
+
 (defn move-label [idx move]
-  (str (inc idx) ". " (format-square (:from move)) " -> " (format-square (:to move))))
+  (str (inc idx)
+       ". "
+       (format-square (:from move))
+       " -> "
+       (format-square (:to move))
+       (when-let [promotion (:promotion move)]
+         (str "=" (get promotion-label promotion (name promotion))))
+       (when (:check? move) "+")))
 
 (defn moves-panel [moves]
   [:div {:style {:text-align "left"}}

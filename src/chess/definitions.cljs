@@ -17,8 +17,11 @@
 (s/def ::to ::square)
 (s/def ::promotion #{:queen :rook :bishop :knight})
 (s/def ::move (s/keys :req-un [::from ::to] :opt-un [::promotion]))
+(s/def ::check? boolean?)
+(s/def ::annotated-move (s/keys :req-un [::from ::to ::check?] :opt-un [::promotion]))
 
 (s/def ::history (s/coll-of ::move :kind vector?))
+(s/def ::annotated-history (s/coll-of ::annotated-move :kind vector?))
 
 (s/def ::rank-map (s/map-of ::rank ::piece))
 (s/def ::board (s/map-of ::square ::piece))
