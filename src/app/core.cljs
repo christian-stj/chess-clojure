@@ -8,7 +8,8 @@
    :black {:king "♚" :queen "♛" :rook "♜" :bishop "♝" :knight "♞" :pawn "♟"}})
 
 (def selected-square (r/atom nil))
-(def moves-version (r/atom 0))
+(def pending-promotion (r/atom nil))
+(def ui-version (r/atom 0))
 
 (defn format-square [[file rank]]
   (str (name file) (name rank)))
@@ -16,38 +17,35 @@
 (defn move-label [idx move]
   (str (inc idx) ". " (format-square (:from move)) " -> " (format-square (:to move))))
 
-(defn moves-panel []
-  (let [_ @moves-version
-        moves (chess/get-history)]
-    [:div {:style {:text-align "left"}}
-     [:h3 {:style {:color "#f0d9b5"
-                   :margin "0 0 12px"
-                   :font-size "18px"}}
-      "Moves"]
-     [:div {:style {:max-height "520px"
-                    :overflow-y "auto"
-                    :padding "8px"
-                    :background "#1f1f1f"
-                    :border "1px solid #333"
-                    :border-radius "6px"}}
-      (if (empty? moves)
-        [:div {:style {:color "#888" :font-size "14px"}}
-         "No moves yet"]
-        (for [[idx move] (map-indexed vector moves)]
-          ^{:key idx}
-          [:div {:style {:color "#ddd"
-                         :font-size "14px"
-                         :padding "4px 0"
-                         :border-bottom "1px solid #2b2b2b"}}
-           (move-label idx move)]))]]))
+(defn moves-panel [moves]
+  [:div {:style {:text-align "left"}}
+   [:h3 {:style {:color "#f0d9b5"
+                 :margin "0 0 12px"
+                 :font-size "18px"}}
+    "Moves"]
+   [:div {:style {:max-height "520px"
+                  :overflow-y "auto"
+                  :padding "8px"
+                  :background "#1f1f1f"
+                  :border "1px solid #333"
+                  :border-radius "6px"}}
+    (if (empty? moves)
+      [:div {:style {:color "#888" :font-size "14px"}}
+       "No moves yet"]
+      (for [[idx move] (map-indexed vector moves)]
+        ^{:key idx}
+        [:div {:style {:color "#ddd"
+                       :font-size "14px"
+                       :padding "4px 0"
+                       :border-bottom "1px solid #2b2b2b"}}
+         (move-label idx move)]))]])
 
-(defn square [row col]
+(defn square [board row col]
   (let [light? (even? (+ row col))
         files [:a :b :c :d :e :f :g :h]
         ranks [8 7 6 5 4 3 2 1]
         file (nth files col)
         rank (keyword (str (nth ranks row)))
-        board (chess/get-state)
         piece-data (board [file rank])
         piece-str (when piece-data
               (get-in pieces [(:color piece-data) (:type piece-data)]))
@@ -59,8 +57,10 @@
         on-click (fn []
                    (if-let [from @selected-square]
                      (do
-                       (js/console.log (clj->js (chess/play-move from [file rank])))
-                       (swap! moves-version inc)
+                       (if (chess/pawn-reaching-last-rank? from [file rank])
+                         (reset! pending-promotion {:from from :to [file rank]})
+                         (when (:ok (chess/play-move from [file rank]))
+                           (swap! ui-version inc)))
                        (reset! selected-square nil))
                      (when piece-data
                        (reset! selected-square [file rank]))))]
@@ -76,7 +76,46 @@
                    :user-select "none"}}
      piece-str]))
 
-(defn chess-board [check?]
+(defn promotion-picker [board]
+  (when-let [{:keys [from to]} @pending-promotion]
+    (let [color (:color (board from))
+          options [:queen :rook :bishop :knight]]
+      [:div {:style {:position "fixed"
+                     :top 0 :left 0 :right 0 :bottom 0
+                     :background "rgba(0,0,0,0.6)"
+                     :display "flex"
+                     :justify-content "center"
+                     :align-items "center"
+                     :z-index 100}}
+       [:div {:style {:background "#2a2a2a"
+                      :border "2px solid #f0d9b5"
+                      :border-radius "12px"
+                      :padding "20px 24px"
+                      :text-align "center"}}
+        [:div {:style {:color "#f0d9b5"
+                       :font-size "16px"
+                       :margin-bottom "16px"}}
+         "Promote to:"]
+        [:div {:style {:display "flex" :gap "12px"}}
+         (for [piece-type options]
+           ^{:key piece-type}
+           [:div {:on-click (fn []
+                              (when (:ok (chess/play-move from to piece-type))
+                                (swap! ui-version inc)
+                                (reset! pending-promotion nil)))
+                  :style {:width "60px"
+                          :height "60px"
+                          :background "#b58863"
+                          :border-radius "8px"
+                          :display "flex"
+                          :justify-content "center"
+                          :align-items "center"
+                          :font-size "40px"
+                          :cursor "pointer"
+                          :user-select "none"}}
+            (get-in pieces [color piece-type])])]]])))
+
+(defn chess-board [board check?]
   [:div {:style {:display "inline-block"
                  :border (if check? "3px solid #ff3b3b" "3px solid #333")
                  :background "#2a2a2a"
@@ -95,7 +134,7 @@
        [:div {:style {:display "flex"}}
         (for [col (range 8)]
           ^{:key col}
-          [square row col])])]]
+          [square board row col])])]]
    ;; File letters
    [:div {:style {:display "flex" :margin-left "28px" :margin-top "8px"}}
     (for [letter ["a" "b" "c" "d" "e" "f" "g" "h"]]
@@ -104,13 +143,16 @@
                      :color "#888" :font-size "14px"}} letter])]])
 
 (defn home-page []
-  [:div {:style {:text-align "center"}}
-   [:h1 {:style {:color "#f0d9b5"
-                 :margin-bottom "30px"
-                 :font-size "36px"}}
-    "Chess"]
-   (let [_ @moves-version
-         check? (chess/check?)]
+  (let [_ @ui-version
+        board (chess/get-state)
+        moves (chess/get-history)
+        check? (chess/check?)]
+    [:div {:style {:text-align "center"}}
+     [:h1 {:style {:color "#f0d9b5"
+                   :margin-bottom "30px"
+                   :font-size "36px"}}
+      "Chess"]
+     [promotion-picker board]
      [:div {:style {:display "grid"
                     :grid-template-columns "1fr 1fr 1fr"
                     :gap "24px"
@@ -128,9 +170,9 @@
           "Check!"])]
       ;; Middle column: Board
       [:div {:style {:justify-self "center"}}
-       [chess-board check?]]
+       [chess-board board check?]]
       ;; Right column: Moves
-      [moves-panel]])])
+      [moves-panel moves]]]))
 
 (defn ^:export main []
   (when-let [app (.getElementById js/document "app")]

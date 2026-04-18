@@ -10,6 +10,7 @@
                           has-moved?
                           has-piece-of-same-color?
                           path-to
+                          reaches-last-rank?
                           same-square?
                           slides-to?
                           square-diff
@@ -147,13 +148,25 @@
     (some (fn [p] (can-piece-reach? move-list p legal-piece-move? king-position))
           opponent-piece-positions)))
 
-(defn legal-move? [move-list from to]
-  (let [board (get-board-state move-list)
-        piece (board from)
-        color-to-move (get-color-to-move move-list)
-        current-player-to-move? (and piece (= (:color piece) color-to-move))]
-    (and current-player-to-move?
-         (not (same-square? from to))
-         (not (has-piece-of-same-color? board from to))
-         (not (places-king-in-check? move-list legal-piece-move? from to)) ; Resolving check is handled by not placing the king in check again
-         (legal-piece-move? move-list from to))))
+(def ^:private promotion-types #{:queen :rook :bishop :knight})
+
+(defn- promotion-valid? [board from to promotion]
+  (let [piece (board from)]
+    (if (and (= (:type piece) :pawn)
+             (reaches-last-rank? (:color piece) to))
+      (contains? promotion-types promotion)
+      (nil? promotion))))
+
+(defn legal-move?
+  ([move-list from to] (legal-move? move-list from to nil))
+  ([move-list from to promotion]
+   (let [board (get-board-state move-list)
+         piece (board from)
+         color-to-move (get-color-to-move move-list)
+         current-player-to-move? (and piece (= (:color piece) color-to-move))]
+     (and current-player-to-move?
+          (not (same-square? from to))
+          (not (has-piece-of-same-color? board from to))
+          (promotion-valid? board from to promotion)
+          (not (places-king-in-check? move-list legal-piece-move? from to promotion))
+          (legal-piece-move? move-list from to)))))

@@ -15,7 +15,8 @@
 
 (s/def ::from ::square)
 (s/def ::to ::square)
-(s/def ::move (s/keys :req-un [::from ::to]))
+(s/def ::promotion #{:queen :rook :bishop :knight})
+(s/def ::move (s/keys :req-un [::from ::to] :opt-un [::promotion]))
 
 (s/def ::history (s/coll-of ::move :kind vector?))
 

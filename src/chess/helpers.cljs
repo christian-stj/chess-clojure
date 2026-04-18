@@ -23,6 +23,11 @@
   (let [[fd rd] (abs-square-diff from to)]
     (and (<= fd 1) (<= rd 1))))
 
+(defn reaches-last-rank? [color to]
+  (let [[_ to-rank] to]
+    (or (and (= color :white) (= to-rank :8))
+        (and (= color :black) (= to-rank :1)))))
+
 (defn- move-rook-for-castling [board king-from king-to]
   (let [[_ from-rank] king-from
         kingside? (> (first (square->indices king-to))
@@ -47,22 +52,28 @@
          (not= from-file to-file)       ; diagonal move
          (nil? (board to)))))           ; no piece at destination
 
-(defn move-piece [board from to]
-  (let [piece (board from)
-        castling? (and (= (:type piece) :king)
-                       (= 2 (Math/abs (- (first (square->indices to))
-                                         (first (square->indices from))))))
-        en-passant? (en-passant-capture? board from to)]
-    (cond-> (-> board
-                (assoc to piece)
-                (dissoc from))
-      castling?   (move-rook-for-castling from to)
-      en-passant? (remove-en-passant-capture from to))))
+(defn move-piece
+  ([board from to] (move-piece board from to nil))
+  ([board from to promotion]
+   (let [piece (board from)
+         placed-piece (if promotion
+                        (assoc piece :type promotion)
+                        piece)
+         castling? (and (= (:type piece) :king)
+                        (= 2 (Math/abs (- (first (square->indices to))
+                                          (first (square->indices from))))))
+         en-passant? (en-passant-capture? board from to)]
+     (cond-> (-> board
+                 (assoc to placed-piece)
+                 (dissoc from))
+       castling?   (move-rook-for-castling from to)
+       en-passant? (remove-en-passant-capture from to)))))
 
 (def ^:private apply-moves
   (memoize
    (fn [moves]
-     (reduce (fn [state move] (move-piece state (:from move) (:to move)))
+     (reduce (fn [state {:keys [from to promotion]}]
+               (move-piece state from to promotion))
              initial-board
              moves))))
 
@@ -109,17 +120,21 @@
         opponent-piece? (fn [p] (and p (= (:color p) opponent-color)))]
     (find-pieces board opponent-piece?)))
 
-(defn places-king-in-check? [move-list movement-rule from to]
-  (let [simulated-move (conj move-list {:from from :to to})
-        board (get-board-state move-list)
-        simulated-board (get-board-state simulated-move)
-        piece (board from)
-        king-position (if (= (:type piece) :king)
-                        to
-                        (find-piece simulated-board (fn [p] (and (= (:type p) :king) (= (:color p) (:color piece))))))
-        opponent-pieces (get-opponent-piece-positions move-list)]
-    (some (fn [p] (can-piece-reach? simulated-move p movement-rule king-position))
-          opponent-pieces)))
+(defn places-king-in-check?
+  ([move-list movement-rule from to]
+   (places-king-in-check? move-list movement-rule from to nil))
+  ([move-list movement-rule from to promotion]
+   (let [simulated-move (conj move-list (cond-> {:from from :to to}
+                                          promotion (assoc :promotion promotion)))
+         board (get-board-state move-list)
+         simulated-board (get-board-state simulated-move)
+         piece (board from)
+         king-position (if (= (:type piece) :king)
+                         to
+                         (find-piece simulated-board (fn [p] (and (= (:type p) :king) (= (:color p) (:color piece))))))
+         opponent-pieces (get-opponent-piece-positions move-list)]
+     (some (fn [p] (can-piece-reach? simulated-move p movement-rule king-position))
+           opponent-pieces))))
 
 (defn- ray
   "Lazy seq of squares from `origin` (exclusive) stepping in `direction` until off-board."
