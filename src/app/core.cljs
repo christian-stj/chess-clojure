@@ -142,12 +142,35 @@
       [:div {:style {:width "60px" :text-align "center"
                      :color "#888" :font-size "14px"}} letter])]])
 
+(defn toolbar []
+  [:div {:style {:position "absolute"
+                 :top "16px"
+                 :right "16px"
+                 :display "flex"
+                 :gap "10px"
+                 :z-index 20}}
+   [:button {:on-click (fn []
+                         (reset! selected-square nil)
+                         (reset! pending-promotion nil)
+                         (swap! ui-version inc))
+             :style {:background "#2f2f2f"
+                     :color "#f0d9b5"
+                     :border "1px solid #555"
+                     :border-radius "8px"
+                     :padding "8px 14px"
+                     :font-size "14px"
+                     :font-weight "600"
+                     :cursor "pointer"}}
+    "Refresh"]])
+
 (defn home-page []
   (let [_ @ui-version
         board (chess/get-state)
         moves (chess/get-history)
         check? (chess/check?)]
-    [:div {:style {:text-align "center"}}
+    [:div {:style {:text-align "center"
+                   :position "relative"}}
+     [toolbar]
      [:h1 {:style {:color "#f0d9b5"
                    :margin-bottom "30px"
                    :font-size "36px"}}

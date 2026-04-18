@@ -45,5 +45,11 @@ A minimal ClojureScript web project using shadow-cljs for compilation and live r
 npm run build
 ```
 
+## Connecting to the REPL
+
+```
+npx shadow-cljs cljs-repl app
+```
+
 ## License
 MIT
