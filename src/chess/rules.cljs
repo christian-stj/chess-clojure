@@ -6,7 +6,6 @@
                           find-pieces
                           get-board-state
                           get-color-to-move
-                          get-opponent-piece-positions
                           has-moved?
                           has-piece-of-same-color?
                           path-to
@@ -23,8 +22,6 @@
 (def ^:private diagonal  [[1 1] [1 -1] [-1 1] [-1 -1]])
 
 ;; --- Move rules ---
-
-(declare move-rules)
 
 (defn- last-move-was-double-pawn-push? [board move-list to-file]
   (when-let [{last-from :from [last-to-file :as last-to] :to} (peek move-list)]
@@ -77,9 +74,9 @@
   (slides-to? (get-board-state move-list) from to straight))
 
 (defn- knight-move? [_ from to]
-  (let [[file-index-diff rank-index-diff] (abs-square-diff from to)]
-    (or (and (= file-index-diff 2) (= rank-index-diff 1))
-        (and (= file-index-diff 1) (= rank-index-diff 2)))))
+  (let [[file-diff rank-diff] (abs-square-diff from to)]
+    (or (and (= file-diff 2) (= rank-diff 1))
+        (and (= file-diff 1) (= rank-diff 2)))))
 
 (defn- bishop-move? [move-list from to]
   (slides-to? (get-board-state move-list) from to diagonal))
@@ -89,42 +86,47 @@
     (or (slides-to? board from to straight)
         (slides-to? board from to diagonal))))
 
+;; Geometric movement rules: pure piece reach, no check-validation.
+;; King is treated as attacking the eight adjacent squares only —
+;; no castling, no recursion into check detection.
+(def ^:private geometric-rules
+  {:pawn   pawn-move?
+   :rook   rook-move?
+   :knight knight-move?
+   :bishop bishop-move?
+   :queen  queen-move?
+   :king   (fn [_ from to] (within-one-square? from to))})
+
+(defn- geometric-piece-move? [move-list from to]
+  (when-let [rule (geometric-rules (:type ((get-board-state move-list) from)))]
+    (rule move-list from to)))
+
+(defn- square-attacked? [move-list square]
+  (let [board (get-board-state move-list)
+        color-to-move (get-color-to-move move-list)
+        opponent-piece? (fn [p] (and p (not= (:color p) color-to-move)))
+        opponent-positions (find-pieces board opponent-piece?)]
+    (boolean (some (fn [pos] (can-piece-reach? move-list pos geometric-piece-move? square))
+                   opponent-positions))))
+
 (defn- king-move? [move-list from to]
-  (let [[file-index-diff rank-index-diff] (square-diff from to)
+  (let [[file-diff rank-diff] (square-diff from to)
         color-to-move (get-color-to-move move-list)
         on-base-position? (or (and (= color-to-move :white) (= from [:e :1]))
                               (and (= color-to-move :black) (= from [:e :8])))
-        board (get-board-state move-list)
-        opponent-piece? (fn [p] (and p (not= (:color p) color-to-move)))
-        opponent-pieces (find-pieces board opponent-piece?)
-        opponent-king (first (filter (fn [sq] (= (:type (board sq)) :king)) opponent-pieces))
-        target-within-one-square-of-opponent-king? (and opponent-king (within-one-square? opponent-king to))
-        movement-rules-for-other-pieces (assoc move-rules :king (fn [_ _ _] false)) ; Opponent king's moves are not relevant for determining if our king is in check
         castling? (and on-base-position?
-                       (= 0 rank-index-diff)
-                       (= 2 (Math/abs file-index-diff)))]
-    (and
-     (not target-within-one-square-of-opponent-king?)
-     (if castling?
-       (let [queenside? (neg? file-index-diff)
-             [_ from-rank] from
-             rook-position (if queenside?
-                             [:a from-rank]
-                             [:h from-rank])
-             path-to-target (path-to from to straight)
-             opponent-piece-positions (get-opponent-piece-positions move-list)]
-         (and (not (some (fn [pos-on-path]
-                           (some (fn [opponent-piece-pos]
-                                   (let [movement-rule (get movement-rules-for-other-pieces
-                                                            (:type ((get-board-state move-list) opponent-piece-pos)))]
-                                     (can-piece-reach? move-list opponent-piece-pos movement-rule pos-on-path)))
-                                 opponent-piece-positions))
-                         path-to-target)) ; Cannot castle through check
-              (not (has-moved? move-list from)) ; King must not have moved
-              (not (has-moved? move-list rook-position)) ; Rook must not have moved
-              (slides-to? (get-board-state move-list) from rook-position straight))) ; Is the path to the rook clear?
-
-       (within-one-square? from to)))))
+                       (= 0 rank-diff)
+                       (= 2 file-diff))]
+    (if castling?
+      (let [queenside? (neg? file-diff)
+            [_ from-rank] from
+            rook-position (if queenside? [:a from-rank] [:h from-rank])
+            path-to-target (path-to from to straight)]
+        (and (not (some #(square-attacked? move-list %) path-to-target)) ; Cannot castle through check
+             (not (has-moved? move-list from))           ; King must not have moved
+             (not (has-moved? move-list rook-position))  ; Rook must not have moved
+             (slides-to? (get-board-state move-list) from rook-position straight))) ; Path to rook must be clear
+      (within-one-square? from to))))
 
 (def ^:private move-rules
   {:pawn   pawn-move?
@@ -143,10 +145,8 @@
 (defn in-check? [move-list]
   (let [board (get-board-state move-list)
         color-to-move (get-color-to-move move-list)
-        king-position (find-piece board (fn [p] (and (= (:type p) :king) (= (:color p) color-to-move))))
-        opponent-piece-positions (get-opponent-piece-positions move-list)]
-    (some (fn [p] (can-piece-reach? move-list p legal-piece-move? king-position))
-          opponent-piece-positions)))
+        king-position (find-piece board (fn [p] (and (= (:type p) :king) (= (:color p) color-to-move))))]
+    (square-attacked? move-list king-position)))
 
 (def ^:private promotion-types #{:queen :rook :bishop :knight})
 
@@ -178,5 +178,5 @@
           (not (same-square? from to))
           (not (has-piece-of-same-color? board from to))
           (promotion-valid? board from to promotion)
-          (not (places-king-in-check? move-list legal-piece-move? from to promotion))
+          (not (places-king-in-check? move-list geometric-piece-move? from to promotion))
           (legal-piece-move? move-list from to)))))

@@ -3,7 +3,8 @@
    [cljs.spec.alpha :as s]
    [chess.definitions :as d]
    [chess.helpers :as helpers]
-   [chess.rules :as rules]))
+   [chess.rules :as rules]
+   [chess.scriptsAndExamples :as scripts]))
 
 (s/def ::ok string?)
 (s/def ::error string?)

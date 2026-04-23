@@ -59,9 +59,9 @@
          placed-piece (if promotion
                         (assoc piece :type promotion)
                         piece)
+         [file-diff _] (abs-square-diff from to)
          castling? (and (= (:type piece) :king)
-                        (= 2 (Math/abs (- (first (square->indices to))
-                                          (first (square->indices from))))))
+                        (= 2 file-diff))
          en-passant? (en-passant-capture? board from to)]
      (cond-> (-> board
                  (assoc to placed-piece)
@@ -69,20 +69,18 @@
        castling?   (move-rook-for-castling from to)
        en-passant? (remove-en-passant-capture from to)))))
 
-(def ^:private apply-moves
+(def get-board-state
   (memoize
-   (fn [moves]
-     (reduce (fn [state {:keys [from to promotion]}]
-               (move-piece state from to promotion))
-             initial-board
-             moves))))
+   (fn [game-history]
+     (if (empty? game-history)
+       initial-board
+       (let [{:keys [from to promotion]} (peek game-history)
+             prev-board (get-board-state (pop game-history))]
+         (move-piece prev-board from to promotion))))))
 
 (defn has-moved? [game-history square]
   (some (fn [move] (or (= (:from move) square) (= (:to move) square)))
         game-history))
-
-(defn get-board-state [game-history]
-  (apply-moves game-history))
 
 (defn find-pieces
   "Returns a list of positions [file rank] whose piece satisfies `pred`, or an empty list if none."
