@@ -17,7 +17,7 @@
   (mapv - (square->indices to) (square->indices from)))
 
 (defn abs-square-diff [from to]
-  (mapv (fn [n] (Math/abs n)) (square-diff from to)))
+  (mapv #(Math/abs %) (square-diff from to)))
 
 (defn within-one-square? [from to]
   (let [[fd rd] (abs-square-diff from to)]
@@ -122,8 +122,9 @@
   ([move-list movement-rule from to]
    (places-king-in-check? move-list movement-rule from to nil))
   ([move-list movement-rule from to promotion]
-   (let [simulated-move (conj move-list (cond-> {:from from :to to}
-                                          promotion (assoc :promotion promotion)))
+   (let [simulated-move (conj move-list (if promotion
+                                          {:from from :to to :promotion promotion}
+                                          {:from from :to to}))
          board (get-board-state move-list)
          simulated-board (get-board-state simulated-move)
          piece (board from)
@@ -151,7 +152,7 @@
       (take-while (fn [sq] (not= sq to)) squares-along-ray))))
 
 (defn- path-clear? [board path]
-  (every? (fn [sq] (nil? (board sq))) path))
+  (every? #(nil? (board %)) path))
 
 (defn slides-to?
   "Can a piece slide from `from` to `to` along one of `directions` with a clear path?"

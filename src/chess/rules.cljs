@@ -51,10 +51,9 @@
         [to-file _] to
         piece (board from)
         color (:color piece)
-        [file-diff rank-diff] (square-diff from to)
-        forward? (if (= color :white) (pos? rank-diff) (neg? rank-diff))
-        rank-diff (Math/abs rank-diff)
-        file-diff (Math/abs file-diff)
+        [_ signed-rank-diff] (square-diff from to)
+        forward? (if (= color :white) (pos? signed-rank-diff) (neg? signed-rank-diff))
+        [file-diff rank-diff] (abs-square-diff from to)
         piece-at-destination (board to)
         on-base-rank? (or (and (= color :white) (= from-rank :2))
                           (and (= color :black) (= from-rank :7)))]
@@ -106,8 +105,8 @@
         color-to-move (get-color-to-move move-list)
         opponent-piece? (fn [p] (and p (not= (:color p) color-to-move)))
         opponent-positions (find-pieces board opponent-piece?)]
-    (boolean (some (fn [pos] (can-piece-reach? move-list pos geometric-piece-move? square))
-                   opponent-positions))))
+    (some (fn [pos] (can-piece-reach? move-list pos geometric-piece-move? square))
+          opponent-positions)))
 
 (defn- king-move? [move-list from to]
   (let [[file-diff rank-diff] (square-diff from to)

@@ -76,7 +76,61 @@
 
 (Christian)
 
-(comment
+(comment  ; For presentation
+
+  (def initial-board
+    {[:a :2] {:type :pawn :color :white} [:a :1] {:type :rook   :color :white}
+     [:b :2] {:type :pawn :color :white} [:b :1] {:type :knight :color :white}
+     [:c :2] {:type :pawn :color :white} [:c :1] {:type :bishop :color :white}
+     [:d :2] {:type :pawn :color :white} [:d :1] {:type :queen  :color :white}
+     [:e :2] {:type :pawn :color :white} [:e :1] {:type :king   :color :white}
+     [:f :2] {:type :pawn :color :white} [:f :1] {:type :bishop :color :white}
+     [:g :2] {:type :pawn :color :white} [:g :1] {:type :knight :color :white}
+     [:h :2] {:type :pawn :color :white} [:h :1] {:type :rook   :color :white}
+
+     [:a :7] {:type :pawn :color :black} [:a :8] {:type :rook   :color :black}
+     [:b :7] {:type :pawn :color :black} [:b :8] {:type :knight :color :black}
+     [:c :7] {:type :pawn :color :black} [:c :8] {:type :bishop :color :black}
+     [:d :7] {:type :pawn :color :black} [:d :8] {:type :queen  :color :black}
+     [:e :7] {:type :pawn :color :black} [:e :8] {:type :king   :color :black}
+     [:f :7] {:type :pawn :color :black} [:f :8] {:type :bishop :color :black}
+     [:g :7] {:type :pawn :color :black} [:g :8] {:type :knight :color :black}
+     [:h :7] {:type :pawn :color :black} [:h :8] {:type :rook   :color :black}})
+
+  game-history
+  [{:from [:d :2], :to [:d :4]}
+   {:from [:d :7], :to [:d :5]}]
+
+  initial-board
+
+
+  (defn play-move
+    [game-history from to]
+    (if (legal-move? game-history from to)
+      (conj game-history {:from from :to to})
+      game-history))
+
+
+  (defn get-board-state [game-history]
+    (reduce (fn [board-state {:keys [from to]}]
+              (move-piece board-state from to))
+            initial-board
+            game-history))
+
+
+  (defn move-piece
+    [board from to]
+    (let [piece (board from)]
+      (-> board
+          (assoc to piece)
+          (dissoc from))))
+
+
+  get-board-state
+  )
+
+
+(comment ; For demo
 
   ; Force move piece
   (swap! game-history conj {:from [:a :8] :to [:a :1]})
@@ -113,5 +167,7 @@
           y 2
           z 3]
       (* (+ x y) z)))
+
+  (def invert {false true true false})
 
   )
