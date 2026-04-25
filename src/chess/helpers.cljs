@@ -96,10 +96,10 @@
 
 (defn can-piece-reach?
   "Can piece at `piece-pos` legally move to `target`?"
-  [move-list piece-pos movement-rule target]
-  (let [piece ((get-board-state move-list) piece-pos)]
+  [history piece-pos movement-rule target]
+  (let [piece ((get-board-state history) piece-pos)]
     (and piece
-         (movement-rule move-list piece-pos target))))
+         (movement-rule history piece-pos target))))
 
 (defn has-piece-of-same-color? [board from to]
   (let [from-piece (board from)
@@ -119,19 +119,19 @@
     (find-pieces board opponent-piece?)))
 
 (defn places-king-in-check?
-  ([move-list movement-rule from to]
-   (places-king-in-check? move-list movement-rule from to nil))
-  ([move-list movement-rule from to promotion]
-   (let [simulated-move (conj move-list (if promotion
+  ([history movement-rule from to]
+   (places-king-in-check? history movement-rule from to nil))
+  ([history movement-rule from to promotion]
+   (let [simulated-move (conj history (if promotion
                                           {:from from :to to :promotion promotion}
                                           {:from from :to to}))
-         board (get-board-state move-list)
+         board (get-board-state history)
          simulated-board (get-board-state simulated-move)
          piece (board from)
          king-position (if (= (:type piece) :king)
                          to
                          (find-piece simulated-board (fn [p] (and (= (:type p) :king) (= (:color p) (:color piece))))))
-         opponent-pieces (get-opponent-piece-positions move-list)]
+         opponent-pieces (get-opponent-piece-positions history)]
      (some (fn [p] (can-piece-reach? simulated-move p movement-rule king-position))
            opponent-pieces))))
 

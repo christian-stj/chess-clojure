@@ -37,9 +37,11 @@
    (when promotion (s/assert ::d/promotion promotion))
    (if (rules/legal-move? @game-history from to promotion)
      (do
-       (swap! game-history conj (if promotion
-                                  {:from from :to to :promotion promotion}
-                                  {:from from :to to}))
+       (swap! game-history
+              conj
+              (if promotion
+                {:from from :to to :promotion promotion}
+                {:from from :to to}))
        {:ok "Move played"})
      {:error "Illegal move"})))
 

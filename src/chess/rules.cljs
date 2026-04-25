@@ -23,8 +23,8 @@
 
 ;; --- Move rules ---
 
-(defn- last-move-was-double-pawn-push? [board move-list to-file]
-  (when-let [{last-from :from [last-to-file :as last-to] :to} (peek move-list)]
+(defn- last-move-was-double-pawn-push? [board history to-file]
+  (when-let [{last-from :from [last-to-file :as last-to] :to} (peek history)]
     (let [last-piece (board last-to)
           [_ rank-diff] (abs-square-diff last-from last-to)]
       (and last-piece
@@ -32,7 +32,7 @@
            (= rank-diff 2)
            (= last-to-file to-file)))))
 
-(defn- en-passant? [move-list board from to]
+(defn- en-passant? [history board from to]
   (let [color (:color (board from))
         [_ from-rank] from
         [to-file _] to
@@ -43,45 +43,48 @@
          (= rank-diff 1)
          (= file-diff 1)
          (nil? (board to))
-         (last-move-was-double-pawn-push? board move-list to-file))))
+         (last-move-was-double-pawn-push? board history to-file))))
 
-(defn- pawn-move? [move-list from to]
-  (let [board (get-board-state move-list)
-        [from-file from-rank] from
-        [to-file _] to
+(defn- pawn-push? [board from to color [file-diff rank-diff]]
+  (let [[_ from-rank] from
+        on-base-rank? (or (and (= color :white) (= from-rank :2))
+                          (and (= color :black) (= from-rank :7)))]
+    (and (zero? file-diff)
+         (nil? (board to))
+         (if on-base-rank?
+           (<= rank-diff 2)
+           (= rank-diff 1)))))
+
+(defn- pawn-capture? [history board from to color [file-diff rank-diff]]
+  (and (= file-diff 1)
+       (= rank-diff 1)
+       (or (some-> (board to) :color (not= color))
+           (en-passant? history board from to))))
+
+(defn- pawn-move? [history from to]
+  (let [board (get-board-state history)
         piece (board from)
         color (:color piece)
         [_ signed-rank-diff] (square-diff from to)
-        forward? (if (= color :white) (pos? signed-rank-diff) (neg? signed-rank-diff))
-        [file-diff rank-diff] (abs-square-diff from to)
-        piece-at-destination (board to)
-        on-base-rank? (or (and (= color :white) (= from-rank :2))
-                          (and (= color :black) (= from-rank :7)))]
-    (and forward?
-         (if (= from-file to-file) ; Moving straight
-           (and (nil? piece-at-destination)
-                (if on-base-rank?
-                  (<= rank-diff 2)
-                  (<= rank-diff 1)))
-           (and (= rank-diff 1) ; Capturing diagonally
-                (= file-diff 1)
-                (or (and (some? piece-at-destination)
-                         (not= (:color piece-at-destination) color))
-                    (en-passant? move-list board from to)))))))
+        moving-forward? (if (= color :white) (pos? signed-rank-diff) (neg? signed-rank-diff))
+        diffs (abs-square-diff from to)]
+    (and moving-forward?
+         (or (pawn-push? board from to color diffs)
+             (pawn-capture? history board from to color diffs)))))
 
-(defn- rook-move? [move-list from to]
-  (slides-to? (get-board-state move-list) from to straight))
+(defn- rook-move? [history from to]
+  (slides-to? (get-board-state history) from to straight))
 
 (defn- knight-move? [_ from to]
   (let [[file-diff rank-diff] (abs-square-diff from to)]
     (or (and (= file-diff 2) (= rank-diff 1))
         (and (= file-diff 1) (= rank-diff 2)))))
 
-(defn- bishop-move? [move-list from to]
-  (slides-to? (get-board-state move-list) from to diagonal))
+(defn- bishop-move? [history from to]
+  (slides-to? (get-board-state history) from to diagonal))
 
-(defn- queen-move? [move-list from to]
-  (let [board (get-board-state move-list)]
+(defn- queen-move? [history from to]
+  (let [board (get-board-state history)]
     (or (slides-to? board from to straight)
         (slides-to? board from to diagonal))))
 
@@ -96,21 +99,21 @@
    :queen  queen-move?
    :king   (fn [_ from to] (within-one-square? from to))})
 
-(defn- geometric-piece-move? [move-list from to]
-  (when-let [rule (geometric-rules (:type ((get-board-state move-list) from)))]
-    (rule move-list from to)))
+(defn- geometric-piece-move? [history from to]
+  (when-let [rule (geometric-rules (:type ((get-board-state history) from)))]
+    (rule history from to)))
 
-(defn- square-attacked? [move-list square]
-  (let [board (get-board-state move-list)
-        color-to-move (get-color-to-move move-list)
+(defn- square-attacked? [history square]
+  (let [board (get-board-state history)
+        color-to-move (get-color-to-move history)
         opponent-piece? (fn [p] (and p (not= (:color p) color-to-move)))
         opponent-positions (find-pieces board opponent-piece?)]
-    (some (fn [pos] (can-piece-reach? move-list pos geometric-piece-move? square))
+    (some (fn [pos] (can-piece-reach? history pos geometric-piece-move? square))
           opponent-positions)))
 
-(defn- king-move? [move-list from to]
+(defn- king-move? [history from to]
   (let [[file-diff rank-diff] (square-diff from to)
-        color-to-move (get-color-to-move move-list)
+        color-to-move (get-color-to-move history)
         on-base-position? (or (and (= color-to-move :white) (= from [:e :1]))
                               (and (= color-to-move :black) (= from [:e :8])))
         castling? (and on-base-position?
@@ -121,10 +124,10 @@
             [_ from-rank] from
             rook-position (if queenside? [:a from-rank] [:h from-rank])
             path-to-target (path-to from to straight)]
-        (and (not (some #(square-attacked? move-list %) path-to-target)) ; Cannot castle through check
-             (not (has-moved? move-list from))           ; King must not have moved
-             (not (has-moved? move-list rook-position))  ; Rook must not have moved
-             (slides-to? (get-board-state move-list) from rook-position straight))) ; Path to rook must be clear
+        (and (not (some #(square-attacked? history %) path-to-target)) ; Cannot castle through check
+             (not (has-moved? history from))           ; King must not have moved
+             (not (has-moved? history rook-position))  ; Rook must not have moved
+             (slides-to? (get-board-state history) from rook-position straight))) ; Path to rook must be clear
       (within-one-square? from to))))
 
 (def ^:private move-rules
@@ -135,28 +138,28 @@
    :queen  queen-move?
    :king   king-move?})
 
-(defn- legal-piece-move? [move-list from to]
-  (when-let [movement-rule (move-rules (:type ((get-board-state move-list) from)))]
-    (movement-rule move-list from to)))
+(defn- legal-piece-move? [history from to]
+  (when-let [movement-rule (move-rules (:type ((get-board-state history) from)))]
+    (movement-rule history from to)))
 
 ;; --- Board queries ---
 
-(defn in-check? [move-list]
-  (let [board (get-board-state move-list)
-        color-to-move (get-color-to-move move-list)
+(defn in-check? [history]
+  (let [board (get-board-state history)
+        color-to-move (get-color-to-move history)
         king-position (find-piece board (fn [p] (and (= (:type p) :king) (= (:color p) color-to-move))))]
-    (square-attacked? move-list king-position)))
+    (square-attacked? history king-position)))
 
 (def ^:private promotion-types #{:queen :rook :bishop :knight})
 
 (defn pawn-reaching-last-rank?
   "Returns true if the piece at `from` is a pawn whose move to `to` reaches the promotion rank."
-  [move-list from to]
-  (let [board (get-board-state move-list)
+  [history from to]
+  (let [board (get-board-state history)
         piece (board from)]
     (and piece
          (= (:type piece) :pawn)
-         (= (:color piece) (get-color-to-move move-list))
+         (= (:color piece) (get-color-to-move history))
          (reaches-last-rank? (:color piece) to))))
 
 (defn- promotion-valid? [board from to promotion]
@@ -167,15 +170,16 @@
       (nil? promotion))))
 
 (defn legal-move?
-  ([move-list from to] (legal-move? move-list from to nil))
-  ([move-list from to promotion]
-   (let [board (get-board-state move-list)
+  ([history from to] (legal-move? history from to nil))
+  ([history from to promotion]
+   (let [board (get-board-state history)
          piece (board from)
-         color-to-move (get-color-to-move move-list)
+         color-to-move (get-color-to-move history)
          current-player-to-move? (and piece (= (:color piece) color-to-move))]
      (and current-player-to-move?
           (not (same-square? from to))
           (not (has-piece-of-same-color? board from to))
           (promotion-valid? board from to promotion)
-          (not (places-king-in-check? move-list geometric-piece-move? from to promotion))
-          (legal-piece-move? move-list from to)))))
+(not (places-king-in-check? history
+                                      geometric-piece-move? from to promotion))
+          (legal-piece-move? history from to)))))
