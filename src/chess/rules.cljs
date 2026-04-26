@@ -1,7 +1,6 @@
 (ns chess.rules
   (:require
    [chess.helpers :refer [abs-square-diff
-                          can-piece-reach?
                           find-piece
                           find-pieces
                           get-board-state
@@ -13,7 +12,6 @@
                           same-square?
                           slides-to?
                           square-diff
-                          places-king-in-check?
                           within-one-square?]]))
 
 ;; --- Directions ---
@@ -103,32 +101,56 @@
   (when-let [rule (geometric-rules (:type ((get-board-state history) from)))]
     (rule history from to)))
 
-(defn- square-attacked? [history square]
+(defn- can-piece-reach?
+  "Can piece at `piece-pos` reach `target` according to `movement-rule`?"
+  [history piece-pos movement-rule target]
+  (let [piece ((get-board-state history) piece-pos)]
+    (and piece
+         (movement-rule history piece-pos target))))
+
+(defn- square-attacked-by? [history attacker-color square]
   (let [board (get-board-state history)
-        color-to-move (get-color-to-move history)
-        opponent-piece? (fn [p] (and p (not= (:color p) color-to-move)))
-        opponent-positions (find-pieces board opponent-piece?)]
+        attacker? (fn [p] (and p (= (:color p) attacker-color)))
+        attacker-positions (find-pieces board attacker?)]
     (some (fn [pos] (can-piece-reach? history pos geometric-piece-move? square))
-          opponent-positions)))
+          attacker-positions)))
+
+(defn- places-king-in-check?
+  ([history from to]
+   (places-king-in-check? history from to nil))
+  ([history from to promotion]
+   (let [simulated-history (conj history (if promotion
+                                           {:from from :to to :promotion promotion}
+                                           {:from from :to to}))
+         piece ((get-board-state history) from)
+         color (:color piece)
+         opponent-color (if (= color :white) :black :white)
+         simulated-board (get-board-state simulated-history)
+         king-position (if (= (:type piece) :king)
+                         to
+                         (find-piece simulated-board (fn [p] (and (= (:type p) :king) (= (:color p) color)))))]
+     (square-attacked-by? simulated-history opponent-color king-position))))
 
 (defn- king-move? [history from to]
   (let [[file-diff rank-diff] (square-diff from to)
         color-to-move (get-color-to-move history)
+        opponent-color (if (= color-to-move :white) :black :white)
         on-base-position? (or (and (= color-to-move :white) (= from [:e :1]))
                               (and (= color-to-move :black) (= from [:e :8])))
         castling? (and on-base-position?
                        (= 0 rank-diff)
                        (= 2 file-diff))]
-    (if castling?
+    (if-not castling?
+      (within-one-square? from to)
       (let [queenside? (neg? file-diff)
             [_ from-rank] from
             rook-position (if queenside? [:a from-rank] [:h from-rank])
             path-to-target (path-to from to straight)]
-        (and (not (some #(square-attacked? history %) path-to-target)) ; Cannot castle through check
+        (and (not (some #(square-attacked-by? history opponent-color %) path-to-target)) ; Cannot castle through check
              (not (has-moved? history from))           ; King must not have moved
              (not (has-moved? history rook-position))  ; Rook must not have moved
              (slides-to? (get-board-state history) from rook-position straight))) ; Path to rook must be clear
-      (within-one-square? from to))))
+      )))
 
 (def ^:private move-rules
   {:pawn   pawn-move?
@@ -147,8 +169,9 @@
 (defn in-check? [history]
   (let [board (get-board-state history)
         color-to-move (get-color-to-move history)
+        opponent-color (if (= color-to-move :white) :black :white)
         king-position (find-piece board (fn [p] (and (= (:type p) :king) (= (:color p) color-to-move))))]
-    (square-attacked? history king-position)))
+    (square-attacked-by? history opponent-color king-position)))
 
 (def ^:private promotion-types #{:queen :rook :bishop :knight})
 
@@ -180,6 +203,5 @@
           (not (same-square? from to))
           (not (has-piece-of-same-color? board from to))
           (promotion-valid? board from to promotion)
-(not (places-king-in-check? history
-                                      geometric-piece-move? from to promotion))
+          (not (places-king-in-check? history from to promotion))
           (legal-piece-move? history from to)))))

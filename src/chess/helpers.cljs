@@ -94,13 +94,6 @@
   [board pred]
   (first (find-pieces board pred)))
 
-(defn can-piece-reach?
-  "Can piece at `piece-pos` legally move to `target`?"
-  [history piece-pos movement-rule target]
-  (let [piece ((get-board-state history) piece-pos)]
-    (and piece
-         (movement-rule history piece-pos target))))
-
 (defn has-piece-of-same-color? [board from to]
   (let [from-piece (board from)
         to-piece   (board to)]
@@ -117,23 +110,6 @@
         opponent-color (if (= color-to-move :white) :black :white)
         opponent-piece? (fn [p] (and p (= (:color p) opponent-color)))]
     (find-pieces board opponent-piece?)))
-
-(defn places-king-in-check?
-  ([history movement-rule from to]
-   (places-king-in-check? history movement-rule from to nil))
-  ([history movement-rule from to promotion]
-   (let [simulated-move (conj history (if promotion
-                                          {:from from :to to :promotion promotion}
-                                          {:from from :to to}))
-         board (get-board-state history)
-         simulated-board (get-board-state simulated-move)
-         piece (board from)
-         king-position (if (= (:type piece) :king)
-                         to
-                         (find-piece simulated-board (fn [p] (and (= (:type p) :king) (= (:color p) (:color piece))))))
-         opponent-pieces (get-opponent-piece-positions history)]
-     (some (fn [p] (can-piece-reach? simulated-move p movement-rule king-position))
-           opponent-pieces))))
 
 (defn- ray
   "Lazy seq of squares from `origin` (exclusive) stepping in `direction` until off-board."
