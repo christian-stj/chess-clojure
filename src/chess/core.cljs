@@ -29,25 +29,29 @@
 (defn check? []
   (rules/in-check? @game-history))
 
+(defn- validate [spec value]
+  (when-not (s/valid? spec value)
+    {:error (s/explain-str spec value)}))
+
 (defn play-move
   ([from to] (play-move from to nil))
   ([from to promotion]
-   (s/assert ::d/square from)
-   (s/assert ::d/square to)
-   (when promotion (s/assert ::d/promotion promotion))
-   (if (rules/legal-move? @game-history from to promotion)
-     (do
-       (swap! game-history
-              conj
-              (if promotion
-                {:from from :to to :promotion promotion}
-                {:from from :to to}))
-       {:ok "Move played"})
-     {:error "Illegal move"})))
+   (or (validate ::d/square from)
+       (validate ::d/square to)
+       (when promotion (validate ::d/promotion promotion))
+       (if (rules/legal-move? @game-history from to promotion)
+         (do
+           (swap! game-history
+                  conj
+                  (if promotion
+                    {:from from :to to :promotion promotion}
+                    {:from from :to to}))
+           {:ok "Move played"})
+         {:error "Illegal move"}))))
 
 (defn pawn-reaching-last-rank?
   "Returns true if the piece at `from` is a pawn whose move to `to` reaches the promotion rank."
   [from to]
-  (s/assert ::d/square from)
-  (s/assert ::d/square to)
-  (rules/pawn-reaching-last-rank? @game-history from to))
+  (and (s/valid? ::d/square from)
+       (s/valid? ::d/square to)
+       (rules/pawn-reaching-last-rank? @game-history from to)))

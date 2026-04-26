@@ -86,7 +86,6 @@
     (or (slides-to? board from to straight)
         (slides-to? board from to diagonal))))
 
-;; Geometric movement rules: pure piece reach, no check-validation.
 ;; King is treated as attacking the eight adjacent squares only —
 ;; no castling, no recursion into check detection.
 (def ^:private geometric-rules
@@ -139,7 +138,7 @@
                               (and (= color-to-move :black) (= from [:e :8])))
         castling? (and on-base-position?
                        (= 0 rank-diff)
-                       (= 2 file-diff))]
+                       (= 2 (Math/abs file-diff)))]
     (if-not castling?
       (within-one-square? from to)
       (let [queenside? (neg? file-diff)
