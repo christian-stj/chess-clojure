@@ -160,14 +160,25 @@
 
   (rules/legal-move? @game-history [:d :7] [:c :5])
 
+  ; Find all legal moves for the current player
+  (let [squares (for [file [:a :b :c :d :e :f :g :h]
+                      rank [:1 :2 :3 :4 :5 :6 :7 :8]]
+                  [file rank])]
+    (for [from squares
+          to squares
+          :when (rules/legal-move? @game-history from to)]
+      {:from from :to to}))
+
 
   ; Paredit example - good example for paredit navigation and editing that shows usage of various paredit commands
   (def example
     (let [x 1
           y 2
           z 3]
-      (* (+ x y) z)))
+      (+ x y z)))
 
   (def invert {false true true false})
+
+  (js/alert "Hello world!")
 
   )

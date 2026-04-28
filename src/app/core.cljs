@@ -178,7 +178,7 @@
 
 (defn home-page []
   (let [_ @ui-version
-        board (chess/get-state)
+        board (chess/get-board)
         moves (chess/get-history)
         check? (chess/check?)]
     [:div {:style {:text-align "center"

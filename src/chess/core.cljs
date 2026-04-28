@@ -12,7 +12,7 @@
   "Vector of move maps in order: {:from [:e :2] :to [:e :4]}."
   (atom [] :validator #(s/valid? ::game-history %)))
 
-(defn get-state []
+(defn get-board []
   (helpers/get-board-state @game-history))
 
 (defn- history-with-check-states [history]
